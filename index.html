@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Mistrz Tabliczki - gra dla Stasia</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px; color: #fff; }
+  .app { width: 100%; max-width: 560px; background: rgba(255,255,255,0.1); backdrop-filter: blur(10px); border-radius: 24px; padding: 24px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+  .screen { display: none; }
+  .screen.active { display: block; animation: fadeIn 0.3s ease; }
+
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes pop { 0% { transform: scale(0.8); opacity: 0; } 50% { transform: scale(1.1); } 100% { transform: scale(1); opacity: 1; } }
+  @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-8px); } 75% { transform: translateX(8px); } }
+  @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+  @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+
+  .title { font-size: 32px; text-align: center; margin-bottom: 4px; font-weight: 800; text-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+  .subtitle { text-align: center; opacity: 0.9; margin-bottom: 24px; font-size: 14px; }
+  .mascot { font-size: 80px; text-align: center; margin: 20px 0; animation: float 3s ease-in-out infinite; }
+
+  .stats-row { display: flex; gap: 10px; margin-bottom: 20px; }
+  .stat-card { flex: 1; background: rgba(255,255,255,0.15); padding: 14px; border-radius: 14px; text-align: center; }
+  .stat-value { font-size: 24px; font-weight: 700; }
+  .stat-label { font-size: 11px; opacity: 0.85; text-transform: uppercase; letter-spacing: 0.5px; }
+
+  .menu { display: grid; gap: 12px; }
+  .btn { background: rgba(255,255,255,0.95); color: #4c2a85; border: none; padding: 18px; border-radius: 16px; font-size: 17px; font-weight: 700; cursor: pointer; transition: transform 0.15s; box-shadow: 0 4px 14px rgba(0,0,0,0.15); display: flex; align-items: center; justify-content: center; gap: 10px; }
+  .btn:active { transform: scale(0.97); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-secondary { background: rgba(255,255,255,0.2); color: #fff; box-shadow: none; }
+  .btn-danger { background: rgba(239,68,68,0.9); color: #fff; }
+  .btn-icon { font-size: 24px; }
+
+  .game-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 8px; }
+  .badge { background: rgba(255,255,255,0.2); padding: 8px 12px; border-radius: 20px; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+  .badge.timer { background: rgba(255,215,0,0.3); }
+  .badge.timer.warning { background: rgba(239,68,68,0.6); animation: pulse 0.8s infinite; }
+
+  .progress-bar { width: 100%; height: 8px; background: rgba(255,255,255,0.2); border-radius: 4px; overflow: hidden; margin-bottom: 24px; }
+  .progress-fill { height: 100%; background: linear-gradient(90deg, #ffd700, #ff9500); transition: width 0.4s ease; }
+
+  .question-card { background: rgba(255,255,255,0.95); color: #333; padding: 28px 20px; border-radius: 20px; text-align: center; margin-bottom: 20px; animation: pop 0.4s ease; box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
+  .question { font-size: 56px; font-weight: 800; color: #4c2a85; line-height: 1; }
+  .question-hint { font-size: 13px; color: #888; margin-top: 8px; }
+
+  .answers { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .answer-btn { background: rgba(255,255,255,0.95); color: #4c2a85; border: 3px solid transparent; padding: 22px; border-radius: 16px; font-size: 26px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 14px rgba(0,0,0,0.15); }
+  .answer-btn:active { transform: scale(0.95); }
+  .answer-btn:disabled { cursor: default; }
+  .answer-btn.correct { background: #4ade80; color: #fff; border-color: #22c55e; animation: pop 0.3s; }
+  .answer-btn.wrong { background: #ef4444; color: #fff; border-color: #dc2626; animation: shake 0.4s; }
+
+  .feedback { text-align: center; margin-top: 16px; font-size: 18px; font-weight: 600; min-height: 28px; opacity: 0; transition: opacity 0.3s; }
+  .feedback.show { opacity: 1; }
+
+  /* TRYB WPISYWANIA */
+  .type-area {
+    background: rgba(255,255,255,0.95);
+    border-radius: 20px;
+    padding: 24px 20px;
+    margin-bottom: 20px;
+    text-align: center;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+  }
+  .type-input {
+    width: 100%;
+    max-width: 280px;
+    border: 4px solid #cbd5e1;
+    border-radius: 16px;
+    padding: 18px;
+    font-size: 56px;
+    font-weight: 800;
+    text-align: center;
+    color: #4c2a85;
+    background: #fafafa;
+    -moz-appearance: textfield;
+    transition: border-color 0.2s;
+  }
+  .type-input:focus { outline: none; border-color: #667eea; background: #fff; }
+  .type-input.correct { border-color: #22c55e; background: #ecfdf5; }
+  .type-input.wrong { border-color: #dc2626; background: #fef2f2; animation: shake 0.4s; }
+  .type-input::-webkit-outer-spin-button, .type-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  .type-hint { font-size: 13px; color: #888; margin-top: 12px; }
+
+  .result-emoji { font-size: 100px; text-align: center; margin: 10px 0 20px; animation: pop 0.5s ease; }
+  .result-title { text-align: center; font-size: 28px; font-weight: 800; margin-bottom: 8px; }
+  .result-message { text-align: center; font-size: 16px; margin-bottom: 24px; opacity: 0.95; line-height: 1.5; }
+  .result-stats { background: rgba(255,255,255,0.15); padding: 20px; border-radius: 16px; margin-bottom: 20px; }
+  .result-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; font-size: 15px; }
+  .result-row + .result-row { border-top: 1px solid rgba(255,255,255,0.15); }
+  .stars { text-align: center; font-size: 40px; margin: 16px 0; letter-spacing: 8px; }
+
+  .mode-grid { display: grid; gap: 12px; margin-bottom: 16px; }
+  .mode-card { background: rgba(255,255,255,0.95); color: #4c2a85; padding: 16px; border-radius: 16px; cursor: pointer; box-shadow: 0 4px 14px rgba(0,0,0,0.15); display: flex; align-items: center; gap: 14px; text-align: left; border: none; width: 100%; transition: transform 0.15s; }
+  .mode-card:active { transform: scale(0.97); }
+  .mode-icon { font-size: 36px; }
+  .mode-info { flex: 1; }
+  .mode-name { font-size: 16px; font-weight: 700; margin-bottom: 2px; }
+  .mode-desc { font-size: 12px; opacity: 0.75; }
+
+  .trophy-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px; }
+  .trophy { background: rgba(255,255,255,0.15); padding: 12px 6px; border-radius: 12px; text-align: center; opacity: 0.4; }
+  .trophy.earned { background: rgba(255,215,0,0.25); opacity: 1; }
+  .trophy-icon { font-size: 32px; }
+  .trophy-name { font-size: 10px; margin-top: 4px; font-weight: 600; }
+
+  .sheet-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 20px; }
+  @media (min-width: 500px) { .sheet-grid { grid-template-columns: repeat(4, 1fr); } }
+  .sheet-cell { background: rgba(255,255,255,0.95); color: #333; padding: 10px 8px; border-radius: 10px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+  .sheet-cell.checked-correct { background: #4ade80; color: #fff; }
+  .sheet-cell.checked-wrong { background: #ef4444; color: #fff; }
+  .sheet-q { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+  .sheet-input { width: 100%; border: 2px solid #ddd; border-radius: 8px; padding: 6px 4px; font-size: 22px; font-weight: 700; text-align: center; color: #4c2a85; -moz-appearance: textfield; }
+  .sheet-input::-webkit-outer-spin-button, .sheet-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  .sheet-input:focus { outline: none; border-color: #667eea; }
+
+  .modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; align-items: center; justify-content: center; padding: 20px; }
+  .modal-bg.active { display: flex; }
+  .modal { background: #fff; color: #333; border-radius: 20px; padding: 24px; max-width: 360px; width: 100%; text-align: center; }
+  .modal h2 { color: #4c2a85; margin-bottom: 12px; }
+  .modal p { margin-bottom: 20px; line-height: 1.5; }
+  .modal-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .modal-btn { padding: 14px; border: none; border-radius: 12px; font-size: 15px; font-weight: 700; cursor: pointer; }
+  .modal-btn-cancel { background: #f1f5f9; color: #475569; }
+  .modal-btn-confirm { background: #ef4444; color: #fff; }
+
+  .name-input { width: 100%; padding: 18px 20px; border: none; border-radius: 16px; font-size: 18px; font-weight: 600; text-align: center; color: #4c2a85; background: rgba(255,255,255,0.95); box-shadow: 0 4px 14px rgba(0,0,0,0.15); margin-bottom: 16px; }
+  .name-input:focus { outline: 3px solid #ffd700; }
+  .greeting-name { color: #ffd700; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="screen active" id="welcome">
+    <div class="title">Mistrz Tabliczki</div>
+    <div class="subtitle">Hej! Powiedz mi, jak masz na imię</div>
+    <div class="mascot">👋</div>
+    <input type="text" id="playerNameInput" class="name-input" placeholder="Wpisz swoje imię" maxlength="20" autocomplete="off">
+    <button class="btn" onclick="savePlayerName()"><span class="btn-icon">🚀</span>Zaczynamy!</button>
+  </div>
+
+  <div class="screen" id="home">
+    <div class="title">Mistrz Tabliczki</div>
+    <div class="subtitle">Cześć, <span class="greeting-name" id="greetingName">Mistrzu</span>! Gotowy na trening?</div>
+    <div class="mascot">🦸</div>
+    <div class="stats-row">
+      <div class="stat-card"><div class="stat-value" id="totalPoints">0</div><div class="stat-label">Punkty</div></div>
+      <div class="stat-card"><div class="stat-value" id="bestStreak">0</div><div class="stat-label">Najlepsza seria</div></div>
+      <div class="stat-card"><div class="stat-value" id="gamesPlayed">0</div><div class="stat-label">Rund</div></div>
+    </div>
+    <div class="menu">
+      <button class="btn" onclick="showScreen('modes')"><span class="btn-icon">🎯</span>Zagraj!</button>
+      <button class="btn btn-secondary" onclick="showScreen('trophies')"><span class="btn-icon">🏆</span>Moje trofea</button>
+      <button class="btn btn-secondary" onclick="changeName()"><span class="btn-icon">✏️</span>Zmień imię</button>
+      <button class="btn btn-danger" onclick="confirmReset()"><span class="btn-icon">🗑️</span>Wyczyść postępy</button>
+    </div>
+  </div>
+
+  <div class="screen" id="modes">
+    <div class="title" style="font-size:24px">Wybierz tryb</div>
+    <div class="subtitle">Każdy uczy czegoś innego</div>
+    <div class="mode-grid">
+      <button class="mode-card" onclick="startGame('easy')"><div class="mode-icon">🌱</div><div class="mode-info"><div class="mode-name">Spokojny start</div><div class="mode-desc">10 pytań, łatwe liczby, bez czasu</div></div></button>
+      <button class="mode-card" onclick="startGame('normal')"><div class="mode-icon">⚡</div><div class="mode-info"><div class="mode-name">Normalny trening</div><div class="mode-desc">15 pytań, wszystkie do 50</div></div></button>
+      <button class="mode-card" onclick="startGame('hard')"><div class="mode-icon">🔥</div><div class="mode-info"><div class="mode-name">Wyzwanie mistrza</div><div class="mode-desc">20 pytań, te trudniejsze</div></div></button>
+      <button class="mode-card" onclick="startGame('sheet')"><div class="mode-icon">📝</div><div class="mode-info"><div class="mode-name">Sprawdzian na czas</div><div class="mode-desc">20 pytań na ekranie, 5 minut</div></div></button>
+      <button class="mode-card" onclick="startGame('type')"><div class="mode-icon">⌨️</div><div class="mode-info"><div class="mode-name">Wpisywanie</div><div class="mode-desc">10 pytań, wpisz wynik z klawiatury</div></div></button>
+      <button class="mode-card" onclick="startGame('survival')"><div class="mode-icon">💎</div><div class="mode-info"><div class="mode-name">Tryb przetrwania</div><div class="mode-desc">Ile pytań z rzędu dasz radę?</div></div></button>
+    </div>
+    <button class="btn btn-secondary" onclick="showScreen('home')">← Wróć</button>
+  </div>
+
+  <div class="screen" id="game">
+    <div class="game-header">
+      <div class="badge">⭐ <span id="score">0</span></div>
+      <div class="badge">🔥 <span id="streak">0</span></div>
+      <div class="badge">❤️ <span id="lives">3</span></div>
+    </div>
+    <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width: 0%"></div></div>
+    <div class="question-card"><div class="question" id="questionText">2 × 3</div><div class="question-hint" id="questionHint">Ile to jest?</div></div>
+    <div class="answers" id="answers"></div>
+    <div class="feedback" id="feedback"></div>
+    <button class="btn btn-secondary" style="margin-top:20px" onclick="quitGame()">← Wyjdź</button>
+  </div>
+
+  <!-- TRYB WPISYWANIA -->
+  <div class="screen" id="typeGame">
+    <div class="game-header">
+      <div class="badge">⭐ <span id="typeScore">0</span></div>
+      <div class="badge">🔥 <span id="typeStreak">0</span></div>
+      <div class="badge">📝 <span id="typeProgress">0</span>/10</div>
+    </div>
+    <div class="progress-bar"><div class="progress-fill" id="typeProgressFill" style="width: 0%"></div></div>
+    <div class="question-card"><div class="question" id="typeQuestionText">2 × 3</div><div class="question-hint">Wpisz wynik i naciśnij Enter</div></div>
+    <div class="type-area">
+      <input type="number" id="typeInput" class="type-input" inputmode="numeric" pattern="[0-9]*" maxlength="2" autocomplete="off">
+      <div class="type-hint">Po wpisaniu naciśnij Enter albo przycisk poniżej</div>
+    </div>
+    <button class="btn" id="typeSubmitBtn" onclick="submitTypeAnswer()">✓ Sprawdź</button>
+    <div class="feedback" id="typeFeedback"></div>
+    <button class="btn btn-secondary" style="margin-top:14px" onclick="quitGame()">← Wyjdź</button>
+  </div>
+
+  <div class="screen" id="sheetGame">
+    <div class="game-header">
+      <div class="badge timer" id="sheetTimer">⏱ 5:00</div>
+      <div class="badge">📝 <span id="sheetFilled">0</span>/20</div>
+    </div>
+    <div class="progress-bar"><div class="progress-fill" id="sheetProgressFill" style="width: 100%; background: linear-gradient(90deg, #4ade80, #ffd700, #ef4444);"></div></div>
+    <div class="sheet-grid" id="sheetGrid"></div>
+    <button class="btn" id="sheetSubmitBtn" onclick="submitSheet()">✓ Sprawdź odpowiedzi</button>
+    <button class="btn btn-secondary" style="margin-top:10px" onclick="quitGame()">← Wyjdź</button>
+  </div>
+
+  <div class="screen" id="sheetReview">
+    <div class="title" style="font-size:22px">Twoje odpowiedzi</div>
+    <div class="subtitle">Zielone = dobrze, czerwone = błąd</div>
+    <div class="sheet-grid" id="sheetReviewGrid"></div>
+    <button class="btn" onclick="showResults()">Zobacz wynik końcowy →</button>
+    <button class="btn btn-secondary" style="margin-top:10px" onclick="quitGame()">← Wyjdź do menu</button>
+  </div>
+
+  <div class="screen" id="results">
+    <div class="result-emoji" id="resultEmoji">🎉</div>
+    <div class="result-title" id="resultTitle">Świetnie!</div>
+    <div class="result-message" id="resultMessage"></div>
+    <div class="stars" id="resultStars">⭐⭐⭐</div>
+    <div class="result-stats">
+      <div class="result-row"><span>Punkty zdobyte</span><span><strong id="finalScore">0</strong></span></div>
+      <div class="result-row"><span>Poprawne odpowiedzi</span><span><strong id="finalCorrect">0 / 0</strong></span></div>
+      <div class="result-row"><span>Najdłuższa seria</span><span><strong id="finalStreak">0</strong> 🔥</span></div>
+      <div class="result-row" id="finalTimeRow" style="display:none"><span>Czas</span><span><strong id="finalTime">0:00</strong></span></div>
+    </div>
+    <div class="menu">
+      <button class="btn" onclick="showScreen('modes')"><span class="btn-icon">🎯</span>Zagraj jeszcze raz</button>
+      <button class="btn btn-secondary" onclick="showScreen('home')"><span class="btn-icon">🏠</span>Do menu</button>
+    </div>
+  </div>
+
+  <div class="screen" id="trophies">
+    <div class="title" style="font-size:24px">Twoje trofea</div>
+    <div class="subtitle">Zbieraj wszystkie!</div>
+    <div class="trophy-grid" id="trophyGrid"></div>
+    <button class="btn btn-secondary" onclick="showScreen('home')">← Wróć</button>
+  </div>
+
+</div>
+
+<div class="modal-bg" id="confirmModal">
+  <div class="modal">
+    <h2>🗑️ Wyczyścić postępy?</h2>
+    <p>To usunie wszystkie punkty, trofea, statystyki i imię. Czy na pewno?</p>
+    <div class="modal-buttons">
+      <button class="modal-btn modal-btn-cancel" onclick="closeModal()">Anuluj</button>
+      <button class="modal-btn modal-btn-confirm" onclick="doReset()">Tak, wyczyść</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  let state = {};
+  let stats = loadStats();
+  let playerName = loadPlayerName();
+  let typeAnswerLock = false;
+
+  function loadStats() {
+    try {
+      const s = JSON.parse(localStorage.getItem('mistrzTabliczki') || '{}');
+      return { totalPoints: s.totalPoints || 0, bestStreak: s.bestStreak || 0, gamesPlayed: s.gamesPlayed || 0 };
+    } catch { return { totalPoints: 0, bestStreak: 0, gamesPlayed: 0 }; }
+  }
+  function saveStats() { try { localStorage.setItem('mistrzTabliczki', JSON.stringify(stats)); } catch {} }
+  function loadPlayerName() { try { return localStorage.getItem('mistrzTabliczkiName') || ''; } catch { return ''; } }
+  function savePlayerNameToStorage(name) { try { localStorage.setItem('mistrzTabliczkiName', name); } catch {} }
+
+  function savePlayerName() {
+    const input = document.getElementById('playerNameInput');
+    let name = input.value.trim();
+    if (!name) name = 'Mistrzu';
+    if (name.length > 20) name = name.substring(0, 20);
+    playerName = name;
+    savePlayerNameToStorage(name);
+    document.getElementById('greetingName').textContent = name;
+    showScreen('home');
+  }
+  function changeName() {
+    document.getElementById('playerNameInput').value = playerName === 'Mistrzu' ? '' : playerName;
+    showScreen('welcome');
+  }
+  function updateHomeStats() {
+    document.getElementById('totalPoints').textContent = stats.totalPoints;
+    document.getElementById('bestStreak').textContent = stats.bestStreak;
+    document.getElementById('gamesPlayed').textContent = stats.gamesPlayed;
+    document.getElementById('greetingName').textContent = playerName || 'Mistrzu';
+  }
+
+  function confirmReset() { document.getElementById('confirmModal').classList.add('active'); }
+  function closeModal() { document.getElementById('confirmModal').classList.remove('active'); }
+  function doReset() {
+    stats = { totalPoints: 0, bestStreak: 0, gamesPlayed: 0 };
+    playerName = '';
+    try { localStorage.removeItem('mistrzTabliczki'); localStorage.removeItem('mistrzTabliczkiName'); } catch {}
+    saveStats();
+    closeModal();
+    document.getElementById('playerNameInput').value = '';
+    showScreen('welcome');
+  }
+
+  const TROPHIES = [
+    { id: 'first', icon: '🌟', name: 'Pierwsza gra', check: () => stats.gamesPlayed >= 1 },
+    { id: 'streak5', icon: '🔥', name: 'Seria 5', check: () => stats.bestStreak >= 5 },
+    { id: 'streak10', icon: '⚡', name: 'Seria 10', check: () => stats.bestStreak >= 10 },
+    { id: 'points100', icon: '💯', name: '100 punktów', check: () => stats.totalPoints >= 100 },
+    { id: 'points500', icon: '💎', name: '500 punktów', check: () => stats.totalPoints >= 500 },
+    { id: 'points1000', icon: '👑', name: '1000 punktów', check: () => stats.totalPoints >= 1000 },
+    { id: 'games10', icon: '🎮', name: '10 rund', check: () => stats.gamesPlayed >= 10 },
+    { id: 'games25', icon: '🏅', name: '25 rund', check: () => stats.gamesPlayed >= 25 },
+    { id: 'master', icon: '🏆', name: 'Mistrz', check: () => stats.bestStreak >= 20 }
+  ];
+  function renderTrophies() {
+    document.getElementById('trophyGrid').innerHTML = TROPHIES.map(t => {
+      const e = t.check();
+      return `<div class="trophy ${e ? 'earned' : ''}"><div class="trophy-icon">${e ? t.icon : '🔒'}</div><div class="trophy-name">${t.name}</div></div>`;
+    }).join('');
+  }
+
+  function showScreen(id) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    if (id === 'home') updateHomeStats();
+    if (id === 'trophies') renderTrophies();
+    if (id !== 'sheetGame' && state.sheetTimer) { clearInterval(state.sheetTimer); state.sheetTimer = null; }
+  }
+  function quitGame() {
+    if (state.sheetTimer) { clearInterval(state.sheetTimer); state.sheetTimer = null; }
+    typeAnswerLock = false;
+    showScreen('home');
+  }
+
+  function generateQuestion(mode) {
+    const easyPairs = [], allPairs = [], hardPairs = [];
+    for (let a = 1; a <= 10; a++) for (let b = 1; b <= 10; b++) {
+      if (a * b <= 50) {
+        allPairs.push([a, b]);
+        if (a <= 5 && b <= 5) easyPairs.push([a, b]);
+        if ((a >= 6 || b >= 6) && a * b <= 50) hardPairs.push([a, b]);
+      }
+    }
+    let pool = mode === 'easy' ? easyPairs : mode === 'hard' ? hardPairs : allPairs;
+    const [a, b] = pool[Math.floor(Math.random() * pool.length)];
+    const correct = a * b;
+    const wrong = new Set();
+    while (wrong.size < 3) {
+      let offset = Math.floor(Math.random() * 10) - 5;
+      if (offset === 0) offset = 1;
+      let fake = correct + offset;
+      if (fake < 1 || fake > 60 || fake === correct) continue;
+      wrong.add(fake);
+    }
+    return { a, b, correct, options: [...wrong, correct].sort(() => Math.random() - 0.5) };
+  }
+
+  function startGame(mode) {
+    state = { score: 0, streak: 0, bestStreak: 0, lives: 3, questionIdx: 0, correct: 0, mode, survival: mode === 'survival' };
+    if (mode === 'sheet') return startSheet();
+    if (mode === 'type') return startType();
+    state.totalQuestions = mode === 'easy' ? 10 : mode === 'normal' ? 15 : mode === 'hard' ? 20 : 999;
+    if (state.survival) state.lives = 1;
+    showScreen('game');
+    nextQuestion();
+  }
+
+  function nextQuestion() {
+    if (!state.survival && state.questionIdx >= state.totalQuestions) return endGame();
+    if (state.lives <= 0) return endGame();
+    const q = generateQuestion(state.mode);
+    state.currentAnswer = q.correct;
+    state.questionIdx++;
+    document.getElementById('questionText').textContent = `${q.a} × ${q.b}`;
+    document.getElementById('questionHint').textContent = `Pytanie ${state.questionIdx}${state.survival ? '' : ' z ' + state.totalQuestions}`;
+    document.getElementById('score').textContent = state.score;
+    document.getElementById('streak').textContent = state.streak;
+    document.getElementById('lives').textContent = '❤️'.repeat(state.lives);
+    document.getElementById('progressFill').style.width = (state.survival ? Math.min(state.questionIdx * 5, 100) : (state.questionIdx / state.totalQuestions) * 100) + '%';
+    const answersDiv = document.getElementById('answers');
+    answersDiv.innerHTML = '';
+    q.options.forEach(opt => {
+      const btn = document.createElement('button');
+      btn.className = 'answer-btn';
+      btn.textContent = opt;
+      btn.onclick = () => handleAnswer(opt, btn);
+      answersDiv.appendChild(btn);
+    });
+    document.getElementById('feedback').classList.remove('show');
+  }
+
+  function handleAnswer(chosen, btn) {
+    const correct = chosen === state.currentAnswer;
+    document.querySelectorAll('#answers .answer-btn').forEach(b => b.disabled = true);
+    const feedback = document.getElementById('feedback');
+    if (correct) {
+      btn.classList.add('correct');
+      state.streak++; state.correct++;
+      let points = 10;
+      if (state.streak >= 3) points += 5;
+      if (state.streak >= 5) points += 5;
+      if (state.streak >= 10) points += 10;
+      state.score += points;
+      if (state.streak > state.bestStreak) state.bestStreak = state.streak;
+      const cheers = ['Super! 🎉', 'Brawo! 👏', 'Świetnie! ⭐', 'Mistrzostwo! 🔥', 'Tak trzymaj! 💪', 'Genialnie! 🚀'];
+      feedback.textContent = `+${points} pkt · ${cheers[Math.floor(Math.random() * cheers.length)]}`;
+    } else {
+      btn.classList.add('wrong');
+      document.querySelectorAll('#answers .answer-btn').forEach(b => { if (parseInt(b.textContent) === state.currentAnswer) b.classList.add('correct'); });
+      state.streak = 0; state.lives--;
+      feedback.textContent = `Poprawnie: ${state.currentAnswer}. Spróbuj jeszcze raz! 💪`;
+    }
+    feedback.classList.add('show');
+    setTimeout(nextQuestion, correct ? 1100 : 1800);
+  }
+
+  // ====== TRYB WPISYWANIA ======
+  function startType() {
+    state.typeQuestions = [];
+    for (let i = 0; i < 10; i++) state.typeQuestions.push(generateQuestion('normal'));
+    state.typeIdx = 0;
+    state.totalQuestions = 10;
+    typeAnswerLock = false;
+    showScreen('typeGame');
+    nextTypeQuestion();
+  }
+
+  function nextTypeQuestion() {
+    if (state.typeIdx >= 10) return endGame();
+    const q = state.typeQuestions[state.typeIdx];
+    state.currentAnswer = q.correct;
+    state.typeIdx++;
+    typeAnswerLock = false;
+
+    document.getElementById('typeQuestionText').textContent = `${q.a} × ${q.b}`;
+    document.getElementById('typeScore').textContent = state.score;
+    document.getElementById('typeStreak').textContent = state.streak;
+    document.getElementById('typeProgress').textContent = state.typeIdx;
+    document.getElementById('typeProgressFill').style.width = (state.typeIdx / 10 * 100) + '%';
+
+    const input = document.getElementById('typeInput');
+    input.value = '';
+    input.disabled = false;
+    input.classList.remove('correct', 'wrong');
+    document.getElementById('typeSubmitBtn').disabled = false;
+    document.getElementById('typeFeedback').classList.remove('show');
+
+    // Auto-focus na input
+    setTimeout(() => {
+      input.focus();
+      // Na iOS scroll input do widoku
+      input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 100);
+  }
+
+  function submitTypeAnswer() {
+    if (typeAnswerLock) return;
+    const input = document.getElementById('typeInput');
+    const val = parseInt(input.value);
+    if (isNaN(val)) {
+      input.focus();
+      return;
+    }
+    typeAnswerLock = true;
+    input.disabled = true;
+    document.getElementById('typeSubmitBtn').disabled = true;
+
+    const correct = val === state.currentAnswer;
+    const feedback = document.getElementById('typeFeedback');
+
+    if (correct) {
+      input.classList.add('correct');
+      state.streak++; state.correct++;
+      let points = 15; // więcej punktów za wpisywanie
+      if (state.streak >= 3) points += 5;
+      if (state.streak >= 5) points += 10;
+      state.score += points;
+      if (state.streak > state.bestStreak) state.bestStreak = state.streak;
+      const cheers = ['Super! 🎉', 'Brawo! 👏', 'Świetnie! ⭐', 'Mistrzostwo! 🔥', 'Tak trzymaj! 💪', 'Genialnie! 🚀'];
+      feedback.textContent = `+${points} pkt · ${cheers[Math.floor(Math.random() * cheers.length)]}`;
+    } else {
+      input.classList.add('wrong');
+      state.streak = 0;
+      feedback.textContent = `Poprawnie: ${state.currentAnswer}. Spróbuj jeszcze raz! 💪`;
+    }
+    feedback.classList.add('show');
+
+    document.getElementById('typeScore').textContent = state.score;
+    document.getElementById('typeStreak').textContent = state.streak;
+
+    // Auto-przejście do kolejnego pytania
+    setTimeout(nextTypeQuestion, correct ? 1300 : 2000);
+  }
+
+  // Enter w polu = sprawdź
+  document.getElementById('typeInput').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      submitTypeAnswer();
+    }
+  });
+
+  // ====== SHEET ======
+  function startSheet() {
+    state.sheetQuestions = [];
+    for (let i = 0; i < 20; i++) state.sheetQuestions.push(generateQuestion('normal'));
+    state.sheetTimeLeft = 300;
+    state.totalQuestions = 20;
+    document.getElementById('sheetGrid').innerHTML = state.sheetQuestions.map((q, i) => `
+      <div class="sheet-cell" id="sheetCell${i}">
+        <div class="sheet-q">${q.a} × ${q.b} =</div>
+        <input type="number" class="sheet-input" id="sheetInput${i}" data-idx="${i}" inputmode="numeric" pattern="[0-9]*">
+      </div>`).join('');
+    document.querySelectorAll('#sheetGrid .sheet-input').forEach(inp => inp.addEventListener('input', updateSheetFilled));
+    document.getElementById('sheetFilled').textContent = '0';
+    document.getElementById('sheetTimer').classList.remove('warning');
+    document.getElementById('sheetSubmitBtn').disabled = false;
+    showScreen('sheetGame');
+    updateSheetTimer();
+    state.sheetTimer = setInterval(() => {
+      state.sheetTimeLeft--;
+      updateSheetTimer();
+      if (state.sheetTimeLeft <= 0) { clearInterval(state.sheetTimer); submitSheet(); }
+    }, 1000);
+  }
+  function updateSheetTimer() {
+    const m = Math.floor(state.sheetTimeLeft / 60), s = state.sheetTimeLeft % 60;
+    document.getElementById('sheetTimer').innerHTML = `⏱ ${m}:${s.toString().padStart(2,'0')}`;
+    if (state.sheetTimeLeft <= 60) document.getElementById('sheetTimer').classList.add('warning');
+    document.getElementById('sheetProgressFill').style.width = (state.sheetTimeLeft / 300 * 100) + '%';
+  }
+  function updateSheetFilled() {
+    const filled = Array.from(document.querySelectorAll('#sheetGrid .sheet-input')).filter(i => i.value !== '').length;
+    document.getElementById('sheetFilled').textContent = filled;
+  }
+  function submitSheet() {
+    if (state.sheetTimer) { clearInterval(state.sheetTimer); state.sheetTimer = null; }
+    state.correct = 0; state.score = 0;
+    let currentStreak = 0, maxStreak = 0;
+    const reviewHTML = state.sheetQuestions.map((q, i) => {
+      const inp = document.getElementById(`sheetInput${i}`);
+      const val = parseInt(inp.value);
+      const isCorrect = val === q.correct;
+      if (isCorrect) {
+        state.correct++; state.score += 10;
+        currentStreak++;
+        if (currentStreak > maxStreak) maxStreak = currentStreak;
+        return `<div class="sheet-cell checked-correct"><div class="sheet-q">${q.a} × ${q.b} = ${q.correct}</div><div style="font-size:11px;margin-top:4px;font-weight:600">✓ Twoja: ${val}</div></div>`;
+      } else {
+        currentStreak = 0;
+        return `<div class="sheet-cell checked-wrong"><div class="sheet-q">${q.a} × ${q.b} = ${q.correct}</div><div style="font-size:11px;margin-top:4px;font-weight:600">${isNaN(val) ? 'Brak odp.' : 'Twoja: ' + val}</div></div>`;
+      }
+    }).join('');
+    state.bestStreak = maxStreak;
+    state.usedTime = 300 - state.sheetTimeLeft;
+    state.isSheet = true;
+    document.getElementById('sheetReviewGrid').innerHTML = reviewHTML;
+    showScreen('sheetReview');
+  }
+  function showResults() { endGame(state.isSheet); }
+
+  function endGame(isSheet) {
+    stats.totalPoints += state.score;
+    if (state.bestStreak > stats.bestStreak) stats.bestStreak = state.bestStreak;
+    stats.gamesPlayed++;
+    saveStats();
+    const total = state.totalQuestions === 999 ? state.questionIdx - 1 : state.totalQuestions;
+    const ratio = total > 0 ? state.correct / total : 0;
+    let stars = '⭐⭐⭐', emoji = '🏆', title = `Niesamowite, ${playerName}!`;
+    let message = 'Jesteś prawdziwym mistrzem tabliczki mnożenia!';
+    if (ratio < 0.5) { stars = '⭐'; emoji = '💪'; title = `Dobra robota, ${playerName}!`; message = 'Im więcej ćwiczysz, tym lepiej! Spróbuj jeszcze raz.'; }
+    else if (ratio < 0.8) { stars = '⭐⭐'; emoji = '🎉'; title = `Świetnie, ${playerName}!`; message = 'Idzie Ci coraz lepiej! Jeszcze trochę i będziesz mistrzem.'; }
+    document.getElementById('resultStars').textContent = stars;
+    document.getElementById('resultEmoji').textContent = emoji;
+    document.getElementById('resultTitle').textContent = title;
+    document.getElementById('resultMessage').textContent = message;
+    document.getElementById('finalScore').textContent = state.score;
+    document.getElementById('finalCorrect').textContent = `${state.correct} / ${total}`;
+    document.getElementById('finalStreak').textContent = state.bestStreak;
+    if (isSheet && state.usedTime !== undefined) {
+      const m = Math.floor(state.usedTime / 60), s = state.usedTime % 60;
+      document.getElementById('finalTime').textContent = `${m}:${s.toString().padStart(2,'0')}`;
+      document.getElementById('finalTimeRow').style.display = 'flex';
+    } else {
+      document.getElementById('finalTimeRow').style.display = 'none';
+    }
+    showScreen('results');
+  }
+
+  if (playerName) {
+    document.getElementById('greetingName').textContent = playerName;
+    updateHomeStats();
+    showScreen('home');
+  } else {
+    showScreen('welcome');
+  }
+
+  document.getElementById('playerNameInput').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') savePlayerName();
+  });
+</script>
+</body>
+</html>
